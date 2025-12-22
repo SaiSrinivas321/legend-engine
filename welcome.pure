@@ -1,0 +1,214 @@
+import meta::external::language::java::metamodel::*;
+import meta::external::language::java::metamodel::*;
+import meta::pure::metamodel::serialization::grammar::*;
+import meta::external::query::sql::reversePCT::generator::*;
+import meta::pure::test::pct::*;
+import meta::pure::metamodel::relation::*;
+import meta::pure::test::pct::reversePCT::framework::*;
+import meta::external::python::reversePCT::legendQL::*;
+
+function go(): Any[*]
+{
+
+  let x = generateTests('/core_functions_standard/math/aggregator/stdDevPopulation.pure');
+  print($x);
+   
+  // let x = '|#TDS{\n'+
+  //                           'id,valA,valB\n'+
+  //                           '1,1,10\n'+
+  //                           '1,2,20\n'+
+  //                           '2,2,40\n'+
+  //                           '2,4,15}#->meta::pure::functions::relation::extend(~id->meta::pure::functions::relation::over(), ~newCol:{p: meta::pure::metamodel::relation::Relation<(id:Integer, valA:Integer, valB:Integer)>[1], w: meta::pure::functions::relation::_Window<(id:Integer, valA:Integer, valB:Integer)>[1], r: (id:Integer, valA:Integer, valB:Integer)[1]|$r.valA->meta::pure::functions::math::mathUtility::rowMapper($r.valB)}:y: meta::pure::functions::math::mathUtility::RowMapper<Integer, Integer>[*]|$y->meta::pure::functions::math::covarPopulation())';
+  // print(extractTdsCsv($x));
+
+  // let reverses = pythonLegendQLReversesStandardMath();
+
+  // $reverses->map(r |
+  //   $r->map(v |
+  //     print('\n=======================================================\n');
+
+  //     $v.reverses.reverses.reverse
+  //       ->filter(rev |
+  //         !$rev->contains('window_extend') &&
+  //         $rev->toString()->contains('.')
+  //       )
+  //       ->map(rev |
+  //         let s   = $rev->toString();
+  //         let idx = $s->indexOf('.');
+
+  //         let frame = $s->substring(0, $idx)->replace('\\n','\\\\n');
+  //         let chain = $s->substring($idx + 1)->replace('\\n','\\\\n');
+
+  //         let lambda =
+  //           '\'(lambda frame:\' +\n' +
+  //           '               \'  frame.' + $chain + '\' +\n' +
+  //           '               \')(' + $frame + ')\'';
+
+  //         print($lambda);
+  //         print('\n\n');
+  //       );
+  //   );
+
+  //   print('\n=======================================================\n');
+  // );
+
+
+
+
+
+
+  // let tests = [];
+  // print($tests);
+    // $tests->map(test |
+    //   println($test.func->elementToPath());
+
+
+    //   let function = $test.func
+    //         ->cast(@FunctionDefinition<Any>)
+    //         ->printFunctionDefinition(
+    //           meta::relational::grammar::serialization::relationGrammarConfiguration(),
+    //           ^GContext(space = '')
+    //         );
+          
+    //       let funcStr = $function->replace('\'','\\\'')->replace('\r','')->replace('\n','\\n\'+\n                            \'');
+    //       print($funcStr);
+    //     );
+
+  //   let funcKind = 'essential';
+  //   let filePath = 'string/boolean/contains.pure';
+
+  //   let resTests = $tests->map(test|
+  //   let test2 =  $test.func->findPackagableElement()->elementToPath();
+  //   let c = ^Container();
+  //   let z = $test.func->evaluate(list(f:Function<{->Any[*]}>[1]|                                                   
+  //                                                  $c->mutateAdd('vals', ^meta::external::query::sql::reversePCT::generator::FuncAndSQL
+  //                                                                        (
+  //                                                                           function=$f->cast(@FunctionDefinition<Any>)->printFunctionDefinition(^Configuration(fullPath = true, extensions = []), ^GContext(space=''))
+  //                                                                        )
+  //                                                               );
+  //                                                  $f->eval();
+  //                       )
+  //                  );
+  //   $c.vals->removeDuplicatesBy(x|$x.function)
+  //          ->map(x|
+  //               let funcStr = $x.function->replace('\'','\\\'')->replace('\r','')->replace('\n','\\n\'+\n                            \'');
+  //               print($funcStr);
+  //               print('\n');
+  //           );
+  // );  
+  print('not ok');
+}
+
+
+function generateTests(filePath:String[1]):String[1]
+{  
+  let tests= stereotype(PCT, 'test').modelElements->filter(x|$x->instanceOf(ConcreteFunctionDefinition) && $x->sourceInformation().source->startsWith($filePath))->cast(@ConcreteFunctionDefinition<Any>);
+  let resTests = $tests-> map(test|
+    let c = ^Container();
+    let z = $test->evaluate(list(f:Function<{->Any[*]}>[1]|  
+                                      $c->mutateAdd('vals', ^meta::external::query::sql::reversePCT::generator::FuncAndSQL
+                                                            (
+                                                              function=$f->cast(@FunctionDefinition<Any>)->printFunctionDefinition(^Configuration(fullPath = true, extensions = []), ^GContext(space=''))
+                                                            )
+                                                  );
+                                      $f->eval(); 
+                                      
+                        )
+                   );
+    let header ='      ' +$test->elementToPath() + '->testRev(' + 
+    '\n        [\n';
+
+    let revstr = $c.vals->removeDuplicatesBy(x|$x.function)
+           ->map(x|
+                let funcStr = $x.function->replace('\'','\\\'')->replace('\r','')->replace('\n','\\n\'+\n                            \'');
+                '          rev(\''+$funcStr+'\', ' + '\'\')';
+            )->joinStrings(',\n');
+
+
+    let tdsStrs = $c.vals->removeDuplicatesBy(x|$x.function)
+           ->map(x|
+                let funcStr = $x.function->replace('\'','\\\'')->replace('\r','')->replace('\n','\\n\'+\n                            \'');
+                let tds = extractTdsCsv($funcStr->toString());
+                $tds->toOne()->replace('                            ','')->replace('+','');
+            )->joinStrings(',\n');
+    
+    $header + $revstr +  '\n        ]\n' + 
+                '      )\n' + $tdsStrs  ;
+
+
+    );
+
+
+  // 'import meta::pure::test::pct::reversePCT::framework::*;\n'+
+  // 'import meta::external::python::reversePCT::legendQL::*;\n'+
+  // 'function meta::external::python::reversePCT::legendQL::pythonLegendQLReversesStandardMath():ReversesForSource[1]\n'+
+  // '{\n '+
+  // '  [' +
+  // '  ^ReversesForSource(\n'+
+  // '    source = \''+$tests->at(0)->sourceInformation().source->toOne()+'\',\n'+
+  // '    reverses = [\n'+
+                   $resTests->joinStrings(',\n\n') + '\n';
+  // '            ]\n'+
+  // '  )\n'+
+  // '}\n';
+}
+
+function extractTdsCsv(input:String[1]):String[0..1]
+{
+  let parts = $input->split('#');
+
+  if($input->contains('#TDS'),
+  | 'csv_frame("'+ $parts->at(1)->split('{')->at(1)->split('}')->at(0)->replace('\\n','')->split('\n')->joinStrings('\\\\n')->replace('\'','') +'")',
+  |''
+  );
+}
+
+function extractTds(input:String[1]):String[0..1]
+{
+  let parts = $input->split('#TDS{');
+
+  if(
+    $parts->size() < 2,
+    |'',
+    |'#TDS{' +
+      $parts->at(1)->split('}#')->toOne()->at(0) +
+      '}#'
+  );
+}
+
+function toLambdaWindowExtend(pythonExpr:String[1]):String[1]
+{
+  // remove outer window_extend(
+  let inner =
+    $pythonExpr->replace('^.*window_extend\\(|\\)$', '');
+
+  let frame =
+    $inner->split('partition_by=')->at(0)
+           ->replace('frame=', '')
+           ->replace(',$', '');
+
+  let afterPartition =
+    $inner->split('partition_by=')->at(1);
+
+  let partitionBy =
+    $afterPartition->split('order_by=')->toOne()->at(0)
+                   ->replace(',$', '');
+
+  let afterOrder =
+    $afterPartition->split('order_by=')->at(1);
+
+  let orderBy =
+    $afterOrder->split('column_specs=')->at(0)
+               ->replace(',$', '');
+
+  let columnSpecs =
+    $afterOrder->split('column_specs=')->at(1)
+               ->replace('^\\(|\\)$', '');
+
+  '(lambda frame: frame.window_extend(' +
+    'frame.window(' +
+      'partition_by=' + $partitionBy + ', ' +
+      'order_by=' + $orderBy +
+    '), (' + $columnSpecs + ')' +
+  '))(' + $frame + ')';
+}
