@@ -14,10 +14,10 @@
 
 package org.finos.legend.engine.plan.dependencies.domain.date;
 
-import org.eclipse.collections.api.tuple.Pair;
 import org.eclipse.collections.impl.block.factory.Comparators;
-import org.eclipse.collections.impl.tuple.Tuples;
 import org.eclipse.collections.impl.utility.StringIterate;
+import org.finos.legend.pure.m4.coreinstance.primitive.date.PureDateToJava;
+import org.finos.legend.pure.m4.tools.time.TimeZones;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -33,6 +33,7 @@ import java.time.YearMonth;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
+import java.time.temporal.ChronoUnit;
 import java.time.temporal.Temporal;
 import java.util.Calendar;
 import java.util.Date;
@@ -141,7 +142,8 @@ public class PureDate implements org.finos.legend.pure.m4.coreinstance.primitive
         try
         {
             int length = formatString.length();
-            GregorianCalendar calendar = null;
+            ZonedDateTime zoned = null;
+            TimeZone zone = null;
             int i = 0;
             while (i < length)
             {
@@ -200,15 +202,14 @@ public class PureDate implements org.finos.legend.pure.m4.coreinstance.primitive
 
                         if (hasHour())
                         {
-                            if (calendar == null)
+                            if (zoned == null)
                             {
-                                calendar = getCalendar();
-                                calendar.setTimeZone(timeZone);
-                                calendar.add(Calendar.MILLISECOND, timeZone.getOffset(calendar.getTimeInMillis()));
+                                zone = timeZone;
+                                zoned = PureDateToJava.start().toInstant(this).atZone(timeZone.toZoneId());
                             }
-                            else if (!timeZone.equals(calendar.getTimeZone()))
+                            else if (!timeZone.equals(zone))
                             {
-                                throw new IllegalArgumentException("Cannot set multiple timezones: " + calendar.getTimeZone().getID() + ", " + timeZone.getID());
+                                throw new IllegalArgumentException("Cannot set multiple timezones: " + zone.getID() + ", " + timeZone.getID());
                             }
                         }
                         break;
@@ -216,7 +217,7 @@ public class PureDate implements org.finos.legend.pure.m4.coreinstance.primitive
                     // Year
                     case 'y':
                     {
-                        int displayYear = (calendar == null) ? this.year : calendar.get(Calendar.YEAR);
+                        int displayYear = (zoned == null) ? this.year : zoned.getYear();
                         int count = getCharCountFrom(character, formatString, i);
                         if (count < 3)
                         {
@@ -236,7 +237,7 @@ public class PureDate implements org.finos.legend.pure.m4.coreinstance.primitive
                         {
                             throw new IllegalArgumentException("Date has no month: " + this);
                         }
-                        int displayMonth = (calendar == null) ? this.month : (calendar.get(Calendar.MONTH) + 1);
+                        int displayMonth = (zoned == null) ? this.month : zoned.getMonthValue();
                         int count = getCharCountFrom(character, formatString, i);
                         appendZeroPaddedInt(appendable, displayMonth, count + 1);
                         i += count;
@@ -249,7 +250,7 @@ public class PureDate implements org.finos.legend.pure.m4.coreinstance.primitive
                         {
                             throw new IllegalArgumentException("Date has no day: " + this);
                         }
-                        int displayDay = (calendar == null) ? this.day : calendar.get(Calendar.DAY_OF_MONTH);
+                        int displayDay = (zoned == null) ? this.day : zoned.getDayOfMonth();
                         int count = getCharCountFrom(character, formatString, i);
                         appendZeroPaddedInt(appendable, displayDay, count + 1);
                         i += count;
@@ -258,7 +259,7 @@ public class PureDate implements org.finos.legend.pure.m4.coreinstance.primitive
                     // Hour (1-12)
                     case 'h':
                     {
-                        int preDisplayHour = hasHour() ? ((calendar == null) ? this.hour : calendar.get(Calendar.HOUR_OF_DAY)) : 0;
+                        int preDisplayHour = hasHour() ? ((zoned == null) ? this.hour : zoned.getHour()) : 0;
                         int displayHour = (preDisplayHour == 0) ? 12 : ((preDisplayHour > 12) ? (preDisplayHour - 12) : preDisplayHour);
                         int count = getCharCountFrom(character, formatString, i);
                         appendZeroPaddedInt(appendable, displayHour, count + 1);
@@ -268,7 +269,7 @@ public class PureDate implements org.finos.legend.pure.m4.coreinstance.primitive
                     // Hour (0-23)
                     case 'H':
                     {
-                        int displayHour = hasHour() ? ((calendar == null) ? this.hour : calendar.get(Calendar.HOUR_OF_DAY)) : 0;
+                        int displayHour = hasHour() ? ((zoned == null) ? this.hour : zoned.getHour()) : 0;
                         int count = getCharCountFrom(character, formatString, i);
                         appendZeroPaddedInt(appendable, displayHour, count + 1);
                         i += count;
@@ -277,14 +278,14 @@ public class PureDate implements org.finos.legend.pure.m4.coreinstance.primitive
                     // AM/PM
                     case 'a':
                     {
-                        int displayHour = hasHour() ? ((calendar == null) ? this.hour : calendar.get(Calendar.HOUR_OF_DAY)) : 0;
+                        int displayHour = hasHour() ? ((zoned == null) ? this.hour : zoned.getHour()) : 0;
                         appendable.append((displayHour < 12) ? "AM" : "PM");
                         break;
                     }
                     // Minute
                     case 'm':
                     {
-                        int displayMinute = hasMinute() ? ((calendar == null) ? this.minute : calendar.get(Calendar.MINUTE)) : 0;
+                        int displayMinute = hasMinute() ? ((zoned == null) ? this.minute : zoned.getMinute()) : 0;
                         int count = getCharCountFrom(character, formatString, i);
                         appendZeroPaddedInt(appendable, displayMinute, count + 1);
                         i += count;
@@ -339,15 +340,15 @@ public class PureDate implements org.finos.legend.pure.m4.coreinstance.primitive
                     {
                         int count = getCharCountFrom(character, formatString, i);
                         // TODO
-                        if (calendar == null)
+                        if (zoned == null)
                         {
                             appendable.append("GMT");
                         }
                         else
                         {
                             SimpleDateFormat dateFormat = new SimpleDateFormat("z");
-                            dateFormat.setTimeZone(calendar.getTimeZone());
-                            appendable.append(dateFormat.format(calendar.getTime()));
+                            dateFormat.setTimeZone(zone);
+                            appendable.append(dateFormat.format(toDate(zoned)));
                         }
                         i += count;
                         break;
@@ -356,15 +357,15 @@ public class PureDate implements org.finos.legend.pure.m4.coreinstance.primitive
                     case 'Z':
                     {
                         int count = getCharCountFrom(character, formatString, i);
-                        if (calendar == null)
+                        if (zoned == null)
                         {
                             appendable.append("+0000");
                         }
                         else
                         {
                             SimpleDateFormat dateFormat = new SimpleDateFormat("Z");
-                            dateFormat.setTimeZone(calendar.getTimeZone());
-                            appendable.append(dateFormat.format(calendar.getTime()));
+                            dateFormat.setTimeZone(zone);
+                            appendable.append(dateFormat.format(toDate(zoned)));
                         }
                         i += count;
                         break;
@@ -373,15 +374,15 @@ public class PureDate implements org.finos.legend.pure.m4.coreinstance.primitive
                     case 'X':
                     {
                         int count = getCharCountFrom(character, formatString, i);
-                        if (calendar == null)
+                        if (zoned == null)
                         {
                             appendable.append("Z");
                         }
                         else
                         {
                             SimpleDateFormat dateFormat = new SimpleDateFormat("X");
-                            dateFormat.setTimeZone(calendar.getTimeZone());
-                            appendable.append(dateFormat.format(calendar.getTime()));
+                            dateFormat.setTimeZone(zone);
+                            appendable.append(dateFormat.format(toDate(zoned)));
                         }
                         i += count;
                         break;
@@ -1238,7 +1239,15 @@ public class PureDate implements org.finos.legend.pure.m4.coreinstance.primitive
      * precision greater than millisecond.
      *
      * @return Gregorian calendar for Pure date
+     * @deprecated Use {@link #toInstant()} or {@link #toLocalDate()} instead, or
+     * {@link PureDateToJava} where the date may stop short of a day. A Pure date is a span of time
+     * rather than an instant, and this method resolves it to the start of that span. A
+     * {@link GregorianCalendar} also reads dates before 1582 on the Julian calendar and knows no
+     * time zone history before 1900, neither of which is true of a Pure date. Nothing in this
+     * class calls it any longer; it is retained temporarily for callers that have not moved.
      */
+    @Deprecated
+    @Override
     public GregorianCalendar getCalendar()
     {
         GregorianCalendar calendar = new GregorianCalendar(this.year, (this.month == -1) ? 0 : (this.month - 1), (this.day == -1) ? 1 : this.day);
@@ -1393,6 +1402,11 @@ public class PureDate implements org.finos.legend.pure.m4.coreinstance.primitive
         }
     }
 
+    private static Date toDate(ZonedDateTime zoned)
+    {
+        return new Date(zoned.toInstant().toEpochMilli());
+    }
+
     private static int getCharCountFrom(char character, String string, int start)
     {
         int count = 0;
@@ -1506,25 +1520,273 @@ public class PureDate implements org.finos.legend.pure.m4.coreinstance.primitive
         {
             return fromSQLTimestamp((java.sql.Timestamp) date);
         }
-        GregorianCalendar calendar = new GregorianCalendar(GMT_TIME_ZONE);
-        calendar.setTime(date);
-        return fromCalendar(calendar, Calendar.MILLISECOND, new PureDate());
+        return fromInstant(date.toInstant(), 3);
     }
 
+    /**
+     * Resolve the name of a time zone to the zone it stands for.
+     *
+     * <p>Delegates to {@link TimeZones}, which is where every time zone name in Legend is resolved.
+     * It sits here because the Java a relational node generates is compiled against a curated
+     * classpath -- see {@code GeneratePureConfig.MAIN_DEPENDENCIES} -- which carries this class and
+     * not that one, and a second resolver reading names its own way is the thing {@link TimeZones}
+     * exists to prevent.
+     *
+     * @param timeZone time zone name
+     * @return zone the name stands for
+     */
+    public static ZoneId resolveTimeZone(String timeZone)
+    {
+        return TimeZones.parse(timeZone);
+    }
+
+    /**
+     * Create a calendar in the zone a time zone name stands for.
+     *
+     * <p>Here for the same reason as {@link #resolveTimeZone(String)}: a reading that has to fall
+     * back to the dated java.sql APIs needs one of these, and cannot reach {@link TimeZones}.
+     *
+     * @param timeZone time zone name
+     * @return calendar in the zone the name stands for
+     */
+    public static Calendar newCalendar(String timeZone)
+    {
+        return TimeZones.newCalendar(timeZone);
+    }
+
+    /**
+     * Convert a {@link java.time.Year} to a Pure date of year granularity.
+     *
+     * @param year year
+     * @return Pure date
+     */
+    public static PureDate fromYear(Year year)
+    {
+        return newPureDate(year.getValue());
+    }
+
+    /**
+     * Convert a {@link YearMonth} to a Pure date of month granularity.
+     *
+     * @param yearMonth year and month
+     * @return Pure date
+     */
+    public static PureDate fromYearMonth(YearMonth yearMonth)
+    {
+        return newPureDate(yearMonth.getYear(), yearMonth.getMonthValue());
+    }
+
+    /**
+     * Convert a {@link LocalDate} to a Pure date of day granularity.
+     *
+     * <p>A local date names a day and carries no zone, as a Pure date of day granularity does, so
+     * this is a copy of the year, month, and day and no zone is chosen anywhere. Prefer asking a
+     * driver for one of these, through {@link java.sql.ResultSet#getObject(int, Class)}, over
+     * taking a {@link java.sql.Date}: that carries an instant, and an instant gives a day back
+     * only once a zone is picked to read it in.
+     *
+     * @param date local date
+     * @return Pure date
+     */
+    public static PureDate fromLocalDate(LocalDate date)
+    {
+        return newPureDate(date.getYear(), date.getMonthValue(), date.getDayOfMonth());
+    }
+
+    /**
+     * Convert a {@link LocalDateTime} to a Pure date, keeping all nine subsecond digits. Pure dates
+     * carry no time zone and are always understood as UTC, and a {@link LocalDateTime} carries no
+     * zone either, so its fields are taken as they stand.
+     *
+     * @param dateTime local date and time
+     * @return Pure date
+     */
+    public static PureDate fromLocalDateTime(LocalDateTime dateTime)
+    {
+        return fromLocalDateTime(dateTime, 9);
+    }
+
+    /**
+     * Convert a {@link LocalDateTime} to a Pure date, keeping the given number of subsecond digits.
+     * Digits beyond that number are dropped, not rounded. A precision of 0 gives a date of second
+     * granularity. Pure dates carry no time zone and are always understood as UTC, and a
+     * {@link LocalDateTime} carries no zone either, so its fields are taken as they stand.
+     *
+     * @param dateTime           local date and time
+     * @param subsecondPrecision number of subsecond digits to keep (0-9)
+     * @return Pure date
+     */
+    public static PureDate fromLocalDateTime(LocalDateTime dateTime, int subsecondPrecision)
+    {
+        return (subsecondPrecision == 0) ?
+               newPureDate(dateTime.getYear(), dateTime.getMonthValue(), dateTime.getDayOfMonth(), dateTime.getHour(), dateTime.getMinute(), dateTime.getSecond()) :
+               newPureDate(dateTime.getYear(), dateTime.getMonthValue(), dateTime.getDayOfMonth(), dateTime.getHour(), dateTime.getMinute(), dateTime.getSecond(), subsecond(dateTime.getNano(), subsecondPrecision));
+    }
+
+    /**
+     * Convert a {@link LocalDateTime} kept in a given zone to a Pure date, keeping all nine
+     * subsecond digits.
+     *
+     * <p>A {@link LocalDateTime} carries no zone, so it stands for an instant only once the zone
+     * keeping it is named -- which is what a relational connection's time zone says. The instant
+     * is then read in UTC, as every Pure date is.
+     *
+     * @param dateTime local date and time
+     * @param zone     zone keeping that date and time
+     * @return Pure date
+     */
+    public static PureDate fromLocalDateTime(LocalDateTime dateTime, ZoneId zone)
+    {
+        return fromLocalDateTime(dateTime, zone, 9);
+    }
+
+    /**
+     * Convert a {@link LocalDateTime} kept in a given zone to a Pure date, keeping the given number
+     * of subsecond digits. Digits beyond that number are dropped, not rounded. A precision of 0
+     * gives a date of second granularity.
+     *
+     * @param dateTime           local date and time
+     * @param zone               zone keeping that date and time
+     * @param subsecondPrecision number of subsecond digits to keep (0-9)
+     * @return Pure date
+     */
+    public static PureDate fromLocalDateTime(LocalDateTime dateTime, ZoneId zone, int subsecondPrecision)
+    {
+        return fromZonedDateTime(dateTime.atZone(zone), subsecondPrecision);
+    }
+
+    /**
+     * Convert an {@link OffsetDateTime} to a Pure date, keeping all nine subsecond digits. Since
+     * Pure dates are always understood as UTC, the instant is shifted to UTC first: the offset is
+     * applied, not discarded.
+     *
+     * @param dateTime date and time with a UTC offset
+     * @return Pure date
+     */
+    public static PureDate fromOffsetDateTime(OffsetDateTime dateTime)
+    {
+        return fromOffsetDateTime(dateTime, 9);
+    }
+
+    /**
+     * Convert an {@link OffsetDateTime} to a Pure date, keeping the given number of subsecond
+     * digits. Digits beyond that number are dropped, not rounded. A precision of 0 gives a date of
+     * second granularity. Since Pure dates are always understood as UTC, the instant is shifted to
+     * UTC first: the offset is applied, not discarded.
+     *
+     * @param dateTime           date and time with a UTC offset
+     * @param subsecondPrecision number of subsecond digits to keep (0-9)
+     * @return Pure date
+     */
+    public static PureDate fromOffsetDateTime(OffsetDateTime dateTime, int subsecondPrecision)
+    {
+        return fromInstant(dateTime.toInstant(), subsecondPrecision);
+    }
+
+    /**
+     * Convert a {@link ZonedDateTime} to a Pure date, keeping all nine subsecond digits. Since Pure
+     * dates are always understood as UTC, the instant is shifted to UTC first, using the offset the
+     * zone was in at that instant.
+     *
+     * @param dateTime date and time in a time zone
+     * @return Pure date
+     */
+    public static PureDate fromZonedDateTime(ZonedDateTime dateTime)
+    {
+        return fromZonedDateTime(dateTime, 9);
+    }
+
+    /**
+     * Convert a {@link ZonedDateTime} to a Pure date, keeping the given number of subsecond digits.
+     * Digits beyond that number are dropped, not rounded. A precision of 0 gives a date of second
+     * granularity. Since Pure dates are always understood as UTC, the instant is shifted to UTC
+     * first, using the offset the zone was in at that instant.
+     *
+     * @param dateTime           date and time in a time zone
+     * @param subsecondPrecision number of subsecond digits to keep (0-9)
+     * @return Pure date
+     */
+    public static PureDate fromZonedDateTime(ZonedDateTime dateTime, int subsecondPrecision)
+    {
+        return fromInstant(dateTime.toInstant(), subsecondPrecision);
+    }
+
+    /**
+     * Convert an {@link Instant} to a Pure date in UTC, keeping all nine subsecond digits.
+     *
+     * @param instant instant
+     * @return Pure date
+     */
+    public static PureDate fromInstant(Instant instant)
+    {
+        return fromInstant(instant, 9);
+    }
+
+    /**
+     * Convert an {@link Instant} to a Pure date in UTC, keeping the given number of subsecond
+     * digits. Digits beyond that number are dropped, not rounded. A precision of 0 gives a date of
+     * second granularity.
+     *
+     * @param instant            instant
+     * @param subsecondPrecision number of subsecond digits to keep (0-9)
+     * @return Pure date
+     */
+    public static PureDate fromInstant(Instant instant, int subsecondPrecision)
+    {
+        return fromLocalDateTime(LocalDateTime.ofInstant(instant, ZoneOffset.UTC), subsecondPrecision);
+    }
+
+    /**
+     * Convert a SQL date to the Pure date standing for the same day.
+     *
+     * <p>A SQL date names a day and carries no zone, as a Pure date of day granularity does, so
+     * this is a copy of the year, month, and day. Prefer asking a driver for a {@link LocalDate}
+     * where it will give one: a {@link java.sql.Date} carries an instant, and drivers do not agree
+     * on the zone they built that instant in.
+     *
+     * @param date SQL date
+     * @return Pure date
+     */
     public static PureDate fromSQLDate(java.sql.Date date)
     {
-        GregorianCalendar calendar = new GregorianCalendar(GMT_TIME_ZONE);
-        calendar.setTime(date);
-        return fromCalendar(calendar, Calendar.DAY_OF_MONTH, new PureDate());
+        return fromLocalDate(date.toLocalDate());
     }
 
+    /**
+     * Convert a SQL timestamp to the Pure date standing for the same instant, keeping all nine
+     * subsecond digits.
+     *
+     * @param timestamp SQL timestamp
+     * @return Pure date
+     */
     public static PureDate fromSQLTimestamp(java.sql.Timestamp timestamp)
     {
-        GregorianCalendar calendar = new GregorianCalendar(GMT_TIME_ZONE);
-        calendar.setTime(timestamp);
-        PureDate pureDate = fromCalendar(calendar, Calendar.SECOND, new PureDate());
-        ((PureDate) pureDate).subsecond = String.format("%09d", timestamp.getNanos());
-        return pureDate;
+        return fromSQLTimestamp(timestamp, 9);
+    }
+
+    /**
+     * Convert a SQL timestamp to the Pure date standing for the same instant, keeping the given
+     * number of subsecond digits. Digits beyond that number are dropped, not rounded.
+     *
+     * @param timestamp          SQL timestamp
+     * @param subsecondPrecision number of subsecond digits to keep (0-9)
+     * @return Pure date
+     */
+    public static PureDate fromSQLTimestamp(java.sql.Timestamp timestamp, int subsecondPrecision)
+    {
+        return fromInstant(timestamp.toInstant(), subsecondPrecision);
+    }
+
+    /**
+     * Take the given number of subsecond digits from a nanosecond-of-second, dropping the rest.
+     */
+    private static String subsecond(int nano, int subsecondPrecision)
+    {
+        if ((subsecondPrecision < 0) || (subsecondPrecision > 9))
+        {
+            throw new IllegalArgumentException("Subsecond precision must be between 0 and 9, got: " + subsecondPrecision);
+        }
+        return String.format("%09d", nano).substring(0, subsecondPrecision);
     }
 
     public static PureDate newPureDate(int year)
@@ -2005,7 +2267,7 @@ public class PureDate implements org.finos.legend.pure.m4.coreinstance.primitive
         static long getDateDiffWeeks(org.finos.legend.pure.m4.coreinstance.primitive.date.PureDate from, org.finos.legend.pure.m4.coreinstance.primitive.date.PureDate to)
         {
             long absDateDiffDays = Math.abs(getDiffDays(from, to));
-            int noDaysTillSunday = daysUntilSunday(from.getCalendar(), to.getCalendar());
+            int noDaysTillSunday = daysUntilSunday(from, to);
 
             if (noDaysTillSunday > absDateDiffDays)
             {
@@ -2021,27 +2283,9 @@ public class PureDate implements org.finos.legend.pure.m4.coreinstance.primitive
 
         static long getDiffDays(org.finos.legend.pure.m4.coreinstance.primitive.date.PureDate first, org.finos.legend.pure.m4.coreinstance.primitive.date.PureDate second)
         {
-            Pair<GregorianCalendar, org.finos.legend.pure.m4.coreinstance.primitive.date.PureDate> thisCalPair = Tuples.pair(first.getCalendar(), first);
-            Pair<GregorianCalendar, org.finos.legend.pure.m4.coreinstance.primitive.date.PureDate> otherCalPair = Tuples.pair(second.getCalendar(), second);
-            Pair<Pair<GregorianCalendar, org.finos.legend.pure.m4.coreinstance.primitive.date.PureDate>, Pair<GregorianCalendar, org.finos.legend.pure.m4.coreinstance.primitive.date.PureDate>> earlierLaterPair = thisCalPair.getOne().before(otherCalPair.getOne()) ? Tuples.pair(thisCalPair, otherCalPair) : Tuples.pair(otherCalPair, thisCalPair);
-            long result = 0;
-            if (first.getYear() != second.getYear())
-            {
-                int fromYear = earlierLaterPair.getOne().getTwo().getYear();
-                int toYear = earlierLaterPair.getTwo().getTwo().getYear();
-                result += DateFunctions.getYearDays(fromYear) - earlierLaterPair.getOne().getOne().get(Calendar.DAY_OF_YEAR);
-                int nextYear = fromYear + 1;
-                for (; nextYear != toYear; nextYear++)
-                {
-                    result += DateFunctions.getYearDays(nextYear);
-                }
-                result += earlierLaterPair.getTwo().getOne().get(Calendar.DAY_OF_YEAR);
-            }
-            else
-            {
-                result = (long) earlierLaterPair.getTwo().getOne().get(Calendar.DAY_OF_YEAR) - earlierLaterPair.getOne().getOne().get(Calendar.DAY_OF_YEAR);
-            }
-            return result;
+            LocalDate firstDate = PureDateToJava.start().toLocalDate(first);
+            LocalDate secondDate = PureDateToJava.start().toLocalDate(second);
+            return Math.abs(ChronoUnit.DAYS.between(firstDate, secondDate));
         }
 
         static long getDiffHours(org.finos.legend.pure.m4.coreinstance.primitive.date.PureDate first, org.finos.legend.pure.m4.coreinstance.primitive.date.PureDate second)
@@ -2064,23 +2308,17 @@ public class PureDate implements org.finos.legend.pure.m4.coreinstance.primitive
 
         static long getDiffInMilliseconds(org.finos.legend.pure.m4.coreinstance.primitive.date.PureDate date1, org.finos.legend.pure.m4.coreinstance.primitive.date.PureDate date2)
         {
-            long time1 = date1.getCalendar().getTimeInMillis();
-            long time2 = date2.getCalendar().getTimeInMillis();
+            long time1 = PureDateToJava.start().toInstant(date1).toEpochMilli();
+            long time2 = PureDateToJava.start().toInstant(date2).toEpochMilli();
             return Math.abs(time1 - time2);
         }
 
-        private static int daysUntilSunday(Calendar start, Calendar end)
+        private static int daysUntilSunday(org.finos.legend.pure.m4.coreinstance.primitive.date.PureDate from, org.finos.legend.pure.m4.coreinstance.primitive.date.PureDate to)
         {
-            if (start.before(end))
-            {
-                int dayOfWeek = start.get(Calendar.DAY_OF_WEEK);
-                return 7 - (dayOfWeek - 1);
-            }
-            else
-            {
-                int dayOfWeek = start.get(Calendar.DAY_OF_WEEK);
-                return dayOfWeek - 1;
-            }
+            // DayOfWeek runs Monday 1 to Sunday 7, so modulo 7 gives the days elapsed since Sunday.
+            int daysSinceSunday = PureDateToJava.start().toLocalDate(from).getDayOfWeek().getValue() % 7;
+            boolean fromIsEarlier = PureDateToJava.start().toInstant(from).isBefore(PureDateToJava.start().toInstant(to));
+            return fromIsEarlier ? (7 - daysSinceSunday) : daysSinceSunday;
         }
     }
 
